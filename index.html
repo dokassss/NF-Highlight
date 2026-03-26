@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NF·highlight — DANFE</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f11;
+    --surface: #17171a;
+    --border: #25252c;
+    --text: #e8e8ec;
+    --muted: #5a5a68;
+    --c-emitente: #f5e642;
+    --c-nf:       #f59642;
+    --c-dest:     #42c5f5;
+    --c-valor:    #42f5a7;
+    --c-dados:    #f542b0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+
+  header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+  .logo { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+  .logo span { color: var(--c-emitente); }
+  .badge { font-family: 'DM Mono', monospace; font-size: 10px; background: var(--border); color: var(--muted); padding: 3px 8px; border-radius: 4px; letter-spacing: 1px; }
+  .tagline { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+
+  main { flex: 1; display: flex; overflow: hidden; }
+
+  .sidebar { width: 280px; min-width: 280px; border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px; gap: 20px; overflow-y: auto; }
+
+  .drop-zone { border: 1.5px dashed var(--border); border-radius: 10px; padding: 28px 14px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--surface); position: relative; flex-shrink: 0; }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--c-emitente); background: rgba(245,230,66,.04); }
+  .drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-icon { font-size: 28px; margin-bottom: 10px; }
+  .drop-zone h3 { font-size: 13px; font-weight: 700; margin-bottom: 5px; }
+  .drop-zone p { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+  .file-loaded { font-size: 11px; color: var(--c-emitente); font-family: 'DM Mono', monospace; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .section-title { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+
+  .cat-list { display: flex; flex-direction: column; gap: 7px; }
+  .cat-item { display: flex; align-items: center; gap: 9px; padding: 9px 11px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; transition: all 0.15s; user-select: none; }
+  .cat-item:hover { border-color: #444; }
+  .cat-item.active { border-color: var(--cat-color); background: color-mix(in srgb, var(--cat-color) 6%, transparent); }
+  .cat-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--cat-color); }
+  .cat-name { font-size: 12px; font-weight: 600; flex: 1; line-height: 1.3; }
+  .cat-sub { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; font-weight: 400; }
+  .cat-count { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); background: var(--bg); padding: 1px 6px; border-radius: 3px; min-width: 22px; text-align: center; }
+  .cat-item.active .cat-count { color: var(--cat-color); }
+  .toggle { width: 30px; height: 17px; border-radius: 9px; background: var(--border); position: relative; transition: background 0.2s; flex-shrink: 0; }
+  .cat-item.active .toggle { background: var(--cat-color); }
+  .toggle::after { content: ''; position: absolute; width: 11px; height: 11px; border-radius: 50%; background: #fff; top: 3px; left: 3px; transition: left 0.2s; }
+  .cat-item.active .toggle::after { left: 16px; }
+
+  .btn-primary { width: 100%; padding: 13px; background: var(--c-emitente); color: #0e0e10; border: none; border-radius: 9px; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 800; cursor: pointer; transition: all 0.15s; flex-shrink: 0; }
+  .btn-primary:hover { background: #f0da00; transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+  .btn-secondary { width: 100%; padding: 11px; background: transparent; color: var(--c-valor); border: 1.5px solid var(--c-valor); border-radius: 9px; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; flex-shrink: 0; display: none; }
+  .btn-secondary:hover { background: rgba(66,245,167,.08); }
+  .btn-secondary.visible { display: block; }
+
+  .results-box { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 14px; display: none; flex-shrink: 0; }
+  .results-box.visible { display: block; }
+  .result-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .result-row:last-child { border-bottom: none; }
+  .result-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+  .result-info { flex: 1; min-width: 0; }
+  .result-label { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; margin-bottom: 2px; }
+  .result-value { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .result-empty { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; font-style: italic; }
+
+  .preview-area { flex: 1; display: flex; flex-direction: column; align-items: center; overflow-y: auto; padding: 28px; background: #111113; gap: 16px; }
+  .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--muted); text-align: center; }
+  .empty-state .big-icon { font-size: 56px; opacity: 0.25; }
+  .empty-state h2 { font-size: 16px; font-weight: 700; opacity: 0.4; }
+  .empty-state p { font-family: 'DM Mono', monospace; font-size: 11px; max-width: 260px; line-height: 1.7; opacity: 0.6; }
+
+  .page-wrapper { position: relative; box-shadow: 0 8px 48px rgba(0,0,0,.6); border-radius: 3px; flex-shrink: 0; }
+  .page-wrapper canvas { display: block; }
+  .hl-layer { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+
+  .status-bar { padding: 7px 28px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); flex-shrink: 0; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); transition: background 0.3s; }
+  .status-dot.ok   { background: var(--c-valor); box-shadow: 0 0 5px var(--c-valor); }
+  .status-dot.busy { background: var(--c-emitente); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
+  .progress { flex: 1; height: 2px; background: var(--border); border-radius: 2px; overflow: hidden; display: none; }
+  .progress.visible { display: block; }
+  .progress-bar { height: 100%; background: var(--c-emitente); width: 0; transition: width 0.3s; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">NF<span>·</span>highlight</div>
+  <div class="badge">DANFE · LOCAL</div>
+  <div class="tagline">nenhum dado sai do seu computador</div>
+</header>
+
+<main>
+  <aside class="sidebar">
+    <div class="drop-zone" id="dropZone">
+      <input type="file" accept=".pdf" id="fileInput">
+      <div class="drop-icon">📄</div>
+      <h3>Arraste o DANFE aqui</h3>
+      <p>ou clique para selecionar</p>
+      <div class="file-loaded" id="fileName"></div>
+    </div>
+
+    <div>
+      <div class="section-title">Campos a destacar</div>
+      <div class="cat-list" id="catList"></div>
+    </div>
+
+    <button class="btn-primary" id="btnHighlight" disabled>Destacar campos</button>
+
+    <div class="results-box" id="resultsBox">
+      <div class="section-title">Valores encontrados</div>
+      <div id="resultsContent"></div>
+    </div>
+
+    <button class="btn-secondary" id="btnDownload">⬇ Salvar PDF destacado</button>
+  </aside>
+
+  <section class="preview-area" id="previewArea">
+    <div class="empty-state" id="emptyState">
+      <div class="big-icon">🗂️</div>
+      <h2>Nenhum arquivo carregado</h2>
+      <p>Carregue um DANFE em PDF para detectar e destacar os campos automaticamente.</p>
+    </div>
+    <div id="canvasContainer"></div>
+  </section>
+</main>
+
+<div class="status-bar">
+  <div class="status-dot" id="statusDot"></div>
+  <span id="statusText">Aguardando arquivo…</span>
+  <div class="progress" id="progress"><div class="progress-bar" id="progressBar"></div></div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── FIELD DEFINITIONS ──────────────────────────────────────────────────────────
+const FIELDS = [
+  { id:'emitente', label:'Emitente',           sub:'Nome e CNPJ',                color:'#f5e642', detect: detectEmitente },
+  { id:'nfnum',   label:'Nº da Nota Fiscal',   sub:'Número da NF',               color:'#f59642', detect: detectNFNum    },
+  { id:'dest',    label:'Destinatário',         sub:'Nome, CNPJ e Data emissão',  color:'#42c5f5', detect: detectDestinatario },
+  { id:'valor',   label:'Valor Total da Nota',  sub:'Cálculo do imposto',         color:'#42f5a7', detect: detectValorTotal },
+  { id:'dados',   label:'NF de Origem',         sub:'Dados adicionais',           color:'#f542b0', detect: detectDadosAdicionais },
+];
+
+// ── STATE ──────────────────────────────────────────────────────────────────────
+let pdfDoc = null;
+let renderedPages = [];
+let activeFields  = new Set(FIELDS.map(f => f.id));
+let foundValues   = {};
+
+// ── BUILD SIDEBAR ──────────────────────────────────────────────────────────────
+const catListEl = document.getElementById('catList');
+FIELDS.forEach(f => {
+  const div = document.createElement('div');
+  div.className = 'cat-item active';
+  div.dataset.id = f.id;
+  div.style.setProperty('--cat-color', f.color);
+  div.innerHTML = `
+    <div class="cat-dot"></div>
+    <div style="flex:1;min-width:0">
+      <div class="cat-name">${f.label}</div>
+      <div class="cat-sub">${f.sub}</div>
+    </div>
+    <span class="cat-count" id="cnt-${f.id}">–</span>
+    <div class="toggle"></div>`;
+  div.addEventListener('click', () => {
+    activeFields.has(f.id) ? (activeFields.delete(f.id), div.classList.remove('active'))
+                           : (activeFields.add(f.id),    div.classList.add('active'));
+  });
+  catListEl.appendChild(div);
+});
+
+// ── FILE LOADING ───────────────────────────────────────────────────────────────
+const fileInput = document.getElementById('fileInput');
+const dropZone  = document.getElementById('dropZone');
+fileInput.addEventListener('change', e => e.target.files[0] && loadPDF(e.target.files[0]));
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); e.dataTransfer.files[0] && loadPDF(e.dataTransfer.files[0]); });
+
+function setStatus(msg, state='idle') {
+  document.getElementById('statusText').textContent = msg;
+  document.getElementById('statusDot').className = 'status-dot' + (state==='ok'?' ok':state==='busy'?' busy':'');
+}
+function setProgress(pct) {
+  const p = document.getElementById('progress'), b = document.getElementById('progressBar');
+  if (pct===null) { p.classList.remove('visible'); return; }
+  p.classList.add('visible'); b.style.width = pct+'%';
+}
+
+async function loadPDF(file) {
+  setStatus('Carregando PDF…','busy'); setProgress(10);
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('canvasContainer').innerHTML = '';
+  document.getElementById('btnDownload').classList.remove('visible');
+  document.getElementById('resultsBox').classList.remove('visible');
+  document.getElementById('fileName').textContent = file.name;
+  FIELDS.forEach(f => document.getElementById('cnt-'+f.id).textContent = '–');
+  renderedPages = [];
+
+  const buf = await file.arrayBuffer();
+  pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+  const scale = 1.6;
+
+  for (let i = 1; i <= pdfDoc.numPages; i++) {
+    setProgress(10 + (i/pdfDoc.numPages)*75);
+    const page = await pdfDoc.getPage(i);
+    const vp   = page.getViewport({ scale });
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'page-wrapper';
+    wrapper.style.width  = vp.width +'px';
+    wrapper.style.height = vp.height+'px';
+
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width; canvas.height = vp.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+
+    const hlLayer = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    hlLayer.setAttribute('class','hl-layer');
+    hlLayer.setAttribute('width', vp.width);
+    hlLayer.setAttribute('height', vp.height);
+    hlLayer.setAttribute('viewBox', `0 0 ${vp.width} ${vp.height}`);
+
+    wrapper.appendChild(canvas);
+    wrapper.appendChild(hlLayer);
+    document.getElementById('canvasContainer').appendChild(wrapper);
+
+    const tc = await page.getTextContent();
+    const items = tc.items.map(it => {
+      const tx = pdfjsLib.Util.transform(vp.transform, it.transform);
+      return { str: it.str, x: tx[4], y: tx[5], w: Math.abs(it.width*scale), h: Math.abs(it.height*scale) };
+    });
+    renderedPages.push({ viewport: vp, canvas, hlLayer, items });
+  }
+
+  setProgress(100); setTimeout(()=>setProgress(null),400);
+  document.getElementById('btnHighlight').disabled = false;
+  setStatus(`${pdfDoc.numPages} página(s) carregada(s) — clique em Destacar`,'ok');
+}
+
+// ── HIGHLIGHT RUNNER ───────────────────────────────────────────────────────────
+document.getElementById('btnHighlight').addEventListener('click', () => {
+  if (!pdfDoc) return;
+  setStatus('Analisando campos…','busy'); setProgress(5);
+  foundValues = {};
+  renderedPages.forEach(rp => rp.hlLayer.innerHTML = '');
+
+  const allPages = renderedPages.map((rp,i) => ({ idx:i, items:rp.items, h:rp.viewport.height }));
+
+  FIELDS.forEach((field, fi) => {
+    setProgress(5 + (fi/FIELDS.length)*90);
+    if (!activeFields.has(field.id)) { document.getElementById('cnt-'+field.id).textContent='–'; return; }
+    const hits = field.detect(allPages);
+    foundValues[field.id] = hits;
+    document.getElementById('cnt-'+field.id).textContent = hits.length;
+    hits.forEach(h => drawRect(renderedPages[h.page].hlLayer, h.x, h.y, h.w, h.h, field.color));
+  });
+
+  renderResults();
+  setProgress(null);
+  const total = Object.values(foundValues).reduce((s,a)=>s+a.length,0);
+  document.getElementById('btnDownload').classList.add('visible');
+  setStatus(`${total} destaque(s) aplicado(s)`,'ok');
+});
+
+function drawRect(svg, x, y, w, h, color) {
+  const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
+  const padX = 4, padTop = h * 0.18, padBot = h * 0.12;
+  r.setAttribute('x',      x - padX);
+  r.setAttribute('y',      y - h - padTop);
+  r.setAttribute('width',  Math.max(w + padX * 2, 30));
+  r.setAttribute('height', Math.max(h + padTop + padBot, 14));
+  r.setAttribute('fill',         color);
+  r.setAttribute('fill-opacity', '0.65');
+  r.setAttribute('rx', '1');
+  r.setAttribute('style', 'mix-blend-mode: multiply;');
+  svg.appendChild(r);
+}
+
+// ── RESULTS PANEL ──────────────────────────────────────────────────────────────
+function renderResults() {
+  const content = document.getElementById('resultsContent');
+  content.innerHTML = '';
+  FIELDS.forEach(f => {
+    if (!activeFields.has(f.id)) return;
+    const hits   = foundValues[f.id] || [];
+    const unique = [...new Set(hits.map(h=>h.text))];
+    const row = document.createElement('div');
+    row.className = 'result-row';
+    row.innerHTML = `
+      <div class="result-dot" style="background:${f.color};${unique.length?'':'opacity:.3'}"></div>
+      <div class="result-info">
+        <div class="result-label">${f.label}</div>
+        ${unique.length
+          ? `<div class="result-value" title="${unique.join(' | ')}">${unique.join(' · ')}</div>`
+          : `<div class="result-empty">não encontrado</div>`}
+      </div>`;
+    content.appendChild(row);
+  });
+  document.getElementById('resultsBox').classList.add('visible');
+}
+
+// ── DETECTION HELPERS ──────────────────────────────────────────────────────────
+function pageText(items) { return items.map(i=>i.str).join(' '); }
+
+function makeHit(pg, item, text) {
+  return { page:pg.idx, x:item.x, y:item.y, w:item.w, h:item.h, text: text||item.str.trim() };
+}
+
+function rowHit(pg, items, refItem, text) {
+  // highlight the full row containing refItem
+  const rowItems = items.filter(i => Math.abs(i.y - refItem.y) < 8 && i.str.trim());
+  if (!rowItems.length) return makeHit(pg, refItem, text);
+  const minX = Math.min(...rowItems.map(i=>i.x));
+  const maxX = Math.max(...rowItems.map(i=>i.x+i.w));
+  const maxH = Math.max(...rowItems.map(i=>i.h));
+  return { page:pg.idx, x:minX, y:refItem.y, w:maxX-minX, h:maxH, text };
+}
+
+function dedup(hits) {
+  const seen = new Set();
+  return hits.filter(h => { const k=`${h.page}:${Math.round(h.x)}:${Math.round(h.y)}`; return seen.has(k)?false:seen.add(k); });
+}
+
+// ── 1. EMITENTE ────────────────────────────────────────────────────────────────
+function detectEmitente(allPages) {
+  const hits = [];
+  const cnpjRe = /\d{2}[.\s]?\d{3}[.\s]?\d{3}[\/\s]?\d{4}[-\s]?\d{2}/;
+
+  for (const pg of allPages) {
+    const items = pg.items;
+    // Find EMITENTE label
+    const label = items.find(i => /\bEMITENTE\b/i.test(i.str));
+    const refY  = label ? label.y : 0;
+
+    // Nome: lines near / above EMITENTE label, not short codes
+    const nameItems = items.filter(i =>
+      i.y >= refY - 80 && i.y <= refY + 20 &&
+      i.str.trim().length > 4 &&
+      !/CNPJ|CPF|^NF|DANFE|NOTA\s+FISCAL/i.test(i.str)
+    );
+    nameItems.forEach(item => hits.push(makeHit(pg, item)));
+
+    // First CNPJ on page = emitente
+    for (const item of items) {
+      if (cnpjRe.test(item.str)) { hits.push(makeHit(pg, item)); break; }
+    }
+  }
+  return dedup(hits);
+}
+
+// ── 2. Nº DA NOTA FISCAL ──────────────────────────────────────────────────────
+function detectNFNum(allPages) {
+  const hits = [];
+  for (const pg of allPages) {
+    const items = pg.items;
+    // Pattern 1: item containing "Nº" or "No." directly with digits
+    for (const item of items) {
+      const m = item.str.match(/N[°ºo\.]\s*(\d[\d.]{2,})/i);
+      if (m) { hits.push(makeHit(pg, item, m[1].replace(/\./g,''))); }
+    }
+    // Pattern 2: "NOTA FISCAL" label followed closely by a number-only item
+    for (let i=0; i<items.length; i++) {
+      if (/NOTA\s+FISCAL/i.test(items[i].str)) {
+        for (let j=i+1; j<Math.min(i+8,items.length); j++) {
+          if (/^[\d.]+$/.test(items[j].str.trim()) && items[j].str.trim().length>=3) {
+            hits.push(makeHit(pg, items[j], items[j].str.trim().replace(/\./g,'')));
+            break;
+          }
+        }
+      }
+    }
+  }
+  const seen=new Set();
+  return hits.filter(h=>{ const k=h.page+':'+h.text; return seen.has(k)?false:seen.add(k); });
+}
+
+// ── 3. DESTINATÁRIO ───────────────────────────────────────────────────────────
+function detectDestinatario(allPages) {
+  const hits = [];
+  const cnpjRe = /\d{2}[.\s]?\d{3}[.\s]?\d{3}[\/\s]?\d{4}[-\s]?\d{2}/;
+  const dateRe = /\b\d{2}[\/\-.]\d{2}[\/\-.]\d{4}\b/;
+
+  for (const pg of allPages) {
+    const items = pg.items;
+    const label = items.find(i => /DESTINAT[AÁ]RIO/i.test(i.str));
+    const refY  = label ? label.y : pg.h * 0.25;
+
+    const block = items.filter(i => i.y >= refY-5 && i.y <= refY+140);
+
+    // Nome/Razão Social: widest text in block excluding known labels
+    const nameItems = block.filter(i =>
+      i.w > 80 &&
+      /[A-Za-zÀ-ú]{3,}/.test(i.str) &&
+      !/^(CNPJ|CPF|DATA|EMISS|FONE|END|CEP|MUNIC|UF\b|IE\b|INSCR|RG\b|DEST)/i.test(i.str.trim())
+    ).sort((a,b)=>b.w-a.w);
+    nameItems.slice(0,2).forEach(item => hits.push(makeHit(pg, item)));
+
+    // CNPJ: second CNPJ on page
+    let cnpjCount = 0;
+    for (const item of items) {
+      if (cnpjRe.test(item.str)) {
+        cnpjCount++;
+        if (cnpjCount===2) { hits.push(makeHit(pg,item)); break; }
+      }
+    }
+
+    // Data de emissão: first date in block or page
+    const dateItem = block.find(i=>dateRe.test(i.str)) || items.find(i=>dateRe.test(i.str));
+    if (dateItem) hits.push(makeHit(pg, dateItem, dateItem.str.match(dateRe)[0]));
+  }
+  return dedup(hits);
+}
+
+// ── 4. VALOR TOTAL ────────────────────────────────────────────────────────────
+function detectValorTotal(allPages) {
+  const hits = [];
+  const moneyRe = /\d{1,3}(?:\.\d{3})+,\d{2}|\d+,\d{2}/;
+
+  for (const pg of allPages) {
+    const items = pg.items;
+
+    // Find "VALOR TOTAL" label
+    for (let i=0; i<items.length; i++) {
+      if (/VALOR\s+TOTAL/i.test(items[i].str)) {
+        const rowY = items[i].y;
+        // same row
+        const rowItems = items.filter(it=>Math.abs(it.y-rowY)<12 && it!==items[i]);
+        const rowMoney = rowItems.find(it=>moneyRe.test(it.str));
+        if (rowMoney) { hits.push(makeHit(pg,rowMoney,rowMoney.str.match(moneyRe)[0])); continue; }
+        // below
+        const below = items.filter(it=>it.y>rowY && it.y<rowY+35);
+        const belowMoney = below.find(it=>moneyRe.test(it.str));
+        if (belowMoney) { hits.push(makeHit(pg,belowMoney,belowMoney.str.match(moneyRe)[0])); }
+      }
+    }
+
+    // Fallback: largest monetary value on page
+    if (!hits.find(h=>h.page===pg.idx)) {
+      let best=null, bestVal=0;
+      for (const item of items) {
+        const m=item.str.match(moneyRe);
+        if (m) {
+          const val=parseFloat(m[0].replace(/\./g,'').replace(',','.'));
+          if (val>bestVal) { bestVal=val; best={item,text:m[0]}; }
+        }
+      }
+      if (best) hits.push(makeHit(pg,best.item,best.text));
+    }
+  }
+  const seen=new Set();
+  return hits.filter(h=>{ const k=h.text; return seen.has(k)?false:seen.add(k); });
+}
+
+// ── 5. DADOS ADICIONAIS — NF de Origem ───────────────────────────────────────
+// Captures the 3-6 digit reference number (e.g. 3878) from patterns like:
+//   NF COMPLEMENTAR IPI 000003878-1
+//   NF COMPLEMENTA 000.003.881-1
+//   NOTA FISCAL COMPLETO REF 3887-01
+//   NF Complementar de IPI 3878-1
+function detectDadosAdicionais(allPages) {
+  const hits = [];
+  // Matches the reference number before -1 or -01
+  // Handles zero-padded (000003878) and dotted (000.003.881) formats
+  const refNumRe = /(?:NF|NOTA\s+FISCAL)\s+\S+(?:\s+\S+){0,4}?\s+(?:0*\.?)*?(\d{3,6})\s*[-–]\s*0?1/gi;
+  // Simpler fallback: any \d{3,6}-01 or \d{3,6}-1
+  const simpleRe = /\b(?:0+\.?)*?(\d{3,6})\s*[-–]\s*(01|1)\b/g;
+
+  for (const pg of allPages) {
+    const items = pg.items;
+    // Find dados adicionais section
+    const dadosLabel = items.find(i=>/DADOS\s+ADICIONAIS/i.test(i.str));
+    const sectionItems = dadosLabel
+      ? items.filter(i=>i.y>=dadosLabel.y && i.y<=dadosLabel.y+250)
+      : items; // fallback: whole page
+
+    const sectionText = sectionItems.map(i=>i.str).join(' ');
+
+    // Try full pattern
+    refNumRe.lastIndex = 0;
+    let m;
+    while ((m=refNumRe.exec(sectionText))!==null) {
+      const num = m[1];
+      const fullMatch = m[0].trim();
+      // Find item containing this number
+      const anchor = sectionItems.find(i=> i.str.includes(num) || i.str.replace(/[.\s]/g,'').includes('0'.repeat(Math.max(0,6-num.length))+num));
+      if (anchor) {
+        hits.push(rowHit(pg, sectionItems, anchor, `NF origem: ${num}`));
+      }
+    }
+
+    // Fallback: simpleRe in section
+    if (!hits.find(h=>h.page===pg.idx)) {
+      simpleRe.lastIndex = 0;
+      while ((m=simpleRe.exec(sectionText))!==null) {
+        const num = m[1];
+        const anchor = sectionItems.find(i=>i.str.includes(num));
+        if (anchor) hits.push(rowHit(pg, sectionItems, anchor, `NF origem: ${num}`));
+      }
+    }
+  }
+
+  const seen=new Set();
+  return hits.filter(h=>{ const k=h.page+':'+Math.round(h.x)+':'+Math.round(h.y); return seen.has(k)?false:seen.add(k); });
+}
+
+// ── DOWNLOAD ───────────────────────────────────────────────────────────────────
+document.getElementById('btnDownload').addEventListener('click', () => {
+  setStatus('Abrindo diálogo de impressão…','busy');
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><style>
+    *{margin:0;padding:0;box-sizing:border-box}body{background:#fff}
+    .pg{position:relative;page-break-after:always}
+    .pg img{display:block;width:100%}
+    .pg svg{position:absolute;inset:0;width:100%;height:100%}
+  </style></head><body>`);
+  renderedPages.forEach(({canvas,hlLayer}) => {
+    win.document.write(`<div class="pg"><img src="${canvas.toDataURL('image/jpeg',.95)}">${hlLayer.outerHTML}</div>`);
+  });
+  win.document.write(`<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
+  win.document.close();
+  setStatus('Use "Salvar como PDF" no diálogo de impressão','ok');
+});
+</script>
+</body>
+</html>
