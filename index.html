@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NF·highlight — XML</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <style>
   :root {
     --bg: #0f0f11;
@@ -331,154 +330,169 @@ async function generatePDF() {
   if (!parsedData) return;
   setStatus('Gerando PDF…', '');
 
-  const { PDFDocument, rgb, StandardFonts } = PDFLib;
+  try {
+    // Build PDF via canvas → image → print window
+    const fields = [
+      { label: 'EMITENTE',                       color: '#f5e642', icon: '🏭', lines: [parsedData.emitNome, parsedData.emitCNPJ] },
+      { label: 'Nº DA NOTA FISCAL',              color: '#f59642', icon: '🔢', lines: ['Nº ' + parsedData.nfNum] },
+      { label: 'DESTINATÁRIO',                   color: '#42c5f5', icon: '📦', lines: [parsedData.destNome, parsedData.destCNPJ, parsedData.destData ? 'Emissão: ' + parsedData.destData : ''] },
+      { label: 'VALOR TOTAL DA NOTA',            color: '#42f5a7', icon: '💰', lines: [parsedData.valor] },
+      { label: 'NF DE ORIGEM (DADOS ADICIONAIS)',color: '#f542b0', icon: '📎', lines: [parsedData.dados || '—'] },
+    ];
 
-  const doc  = await PDFDocument.create();
-  const page = doc.addPage([595, 842]); // A4
-  const { width, height } = page.getSize();
+    const W = 794, MARGIN = 48, BLOCK_PAD = 16;
+    const canvas  = document.createElement('canvas');
+    canvas.width  = W;
 
-  const fontBold   = await doc.embedFont(StandardFonts.HelveticaBold);
-  const fontNormal = await doc.embedFont(StandardFonts.Helvetica);
-
-  // ── helpers ──
-  function hexToRgb(hex) {
-    const r = parseInt(hex.slice(1,3),16)/255;
-    const g = parseInt(hex.slice(3,5),16)/255;
-    const b = parseInt(hex.slice(5,7),16)/255;
-    return rgb(r,g,b);
-  }
-
-  function drawHighlightedBlock(opts) {
-    const { y, label, lines, color, icon } = opts;
-    const blockH  = 20 + lines.length * 20 + 14;
-    const blockY  = y - blockH;
-
-    // Background highlight (marker style)
-    page.drawRectangle({
-      x: 40, y: blockY,
-      width: width - 80, height: blockH,
-      color: hexToRgb(color),
-      opacity: 0.18,
-      borderRadius: 4,
+    // First pass: calculate total height
+    const ctx = canvas.getContext('2d');
+    let totalH = 80; // header
+    fields.forEach(f => {
+      const validLines = f.lines.filter(l => l && l.trim() && l !== 'Nº ');
+      totalH += BLOCK_PAD * 2 + 22 + validLines.length * 26 + 16;
     });
-    // Left accent bar
-    page.drawRectangle({
-      x: 40, y: blockY,
-      width: 4, height: blockH,
-      color: hexToRgb(color),
-      opacity: 1,
-    });
+    totalH += 60; // footer
+    canvas.height = totalH;
 
-    // Icon + Label
-    page.drawText(`${icon}  ${label}`, {
-      x: 52, y: blockY + blockH - 16,
-      size: 9,
-      font: fontBold,
-      color: hexToRgb(color),
-    });
+    // Background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, totalH);
 
-    // Lines
-    lines.forEach((line, i) => {
-      if (!line || line === '—') return;
-      // highlight strip behind the value text
-      const textW = fontBold.widthOfTextAtSize(line, 13);
-      page.drawRectangle({
-        x: 50, y: blockY + blockH - 34 - i*20,
-        width: Math.min(textW + 8, width - 100),
-        height: 17,
-        color: hexToRgb(color),
-        opacity: 0.45,
-        borderRadius: 2,
+    // ── Header ──
+    ctx.fillStyle = '#111113';
+    ctx.fillRect(0, 0, W, 68);
+
+    ctx.font = 'bold 24px Arial';
+    ctx.fillStyle = '#f5e642';
+    ctx.fillText('NF·highlight', MARGIN, 38);
+
+    ctx.font = '11px Arial';
+    ctx.fillStyle = '#888';
+    ctx.fillText('Resumo da Nota Fiscal — gerado automaticamente', MARGIN, 56);
+
+    // NF badge
+    const nfLabel = 'NF ' + (parsedData.nfNum || '—');
+    ctx.fillStyle = '#f59642';
+    roundRect(ctx, W - 130, 18, 85, 30, 5);
+    ctx.fill();
+    ctx.font = 'bold 13px Arial';
+    ctx.fillStyle = '#111';
+    ctx.fillText(nfLabel, W - 122, 38);
+
+    // ── Blocks ──
+    let y = 80;
+    fields.forEach(f => {
+      const validLines = f.lines.filter(l => l && l.trim() && l !== 'Nº ');
+      if (!validLines.length) return;
+
+      const blockH = BLOCK_PAD * 2 + 22 + validLines.length * 26;
+
+      // Background tint
+      ctx.fillStyle = f.color;
+      ctx.globalAlpha = 0.12;
+      roundRect(ctx, MARGIN, y, W - MARGIN*2, blockH, 6);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Left accent bar
+      ctx.fillStyle = f.color;
+      ctx.globalAlpha = 1;
+      ctx.fillRect(MARGIN, y, 4, blockH);
+
+      // Label
+      ctx.font = 'bold 10px Arial';
+      ctx.fillStyle = f.color;
+      ctx.fillText(f.icon + '  ' + f.label, MARGIN + 14, y + BLOCK_PAD + 10);
+
+      // Value lines with highlight strip
+      validLines.forEach((line, i) => {
+        const lineY = y + BLOCK_PAD + 22 + i * 26;
+        const textW = Math.min(ctx.measureText(line).width + 12, W - MARGIN*2 - 20);
+
+        // Highlight strip
+        ctx.fillStyle = f.color;
+        ctx.globalAlpha = 0.45;
+        roundRect(ctx, MARGIN + 12, lineY - 17, textW, 22, 3);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Text
+        ctx.font = 'bold 14px Arial';
+        ctx.fillStyle = '#111111';
+        ctx.fillText(line, MARGIN + 16, lineY);
       });
-      page.drawText(line, {
-        x: 54, y: blockY + blockH - 30 - i*20,
-        size: 13,
-        font: fontBold,
-        color: rgb(0.08, 0.08, 0.10),
-      });
+
+      y += blockH + 14;
     });
 
-    return blockY - 12; // next Y
+    // ── Footer ──
+    ctx.fillStyle = '#eee';
+    ctx.fillRect(0, totalH - 44, W, 1);
+    ctx.font = '9px Arial';
+    ctx.fillStyle = '#aaa';
+    const now = new Date().toLocaleString('pt-BR');
+    ctx.fillText('Gerado em ' + now + ' · nenhum dado foi enviado a servidores externos', MARGIN, totalH - 20);
+
+    // ── Output: open in new tab as image, user can print/save ──
+    const imgData = canvas.toDataURL('image/png');
+    const win = window.open('', '_blank');
+    if (!win) {
+      setStatus('Popup bloqueado! Permita popups para este site e tente novamente.', 'err');
+      return;
+    }
+    win.document.write(`<!DOCTYPE html><html><head>
+      <title>NF_${parsedData.nfNum || 'destaque'}</title>
+      <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:#f0f0f0; display:flex; flex-direction:column; align-items:center; padding:20px; font-family:Arial,sans-serif; }
+        img { max-width:100%; box-shadow:0 4px 24px rgba(0,0,0,.15); background:#fff; }
+        .toolbar { margin-bottom:16px; display:flex; gap:10px; }
+        button { padding:10px 20px; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:bold; }
+        .btn-print { background:#f5e642; color:#111; }
+        .btn-save  { background:#42f5a7; color:#111; }
+        .btn-print:hover { background:#e6d600; }
+        .btn-save:hover  { background:#00e680; }
+      </style>
+    </head><body>
+      <div class="toolbar">
+        <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar como PDF</button>
+        <button class="btn-save" onclick="dl()">⬇ Baixar imagem PNG</button>
+      </div>
+      <img src="${imgData}" />
+      <script>
+        function dl() {
+          const a = document.createElement('a');
+          a.href = '${imgData}';
+          a.download = 'NF_${parsedData.nfNum || 'destaque'}.png';
+          a.click();
+        }
+      <\/script>
+    </body></html>`);
+    win.document.close();
+
+    const btn = document.getElementById('btnPDF');
+    btn.textContent = '✅ PDF aberto em nova aba';
+    setStatus('Pronto! Use "Imprimir → Salvar como PDF" na aba que abriu.', 'ok');
+
+  } catch(err) {
+    setStatus('Erro ao gerar PDF: ' + err.message, 'err');
+    console.error(err);
   }
-
-  // ── Header ──
-  page.drawRectangle({ x:0, y: height-60, width, height:60, color: rgb(0.06,0.06,0.07) });
-  page.drawText('NF·highlight', { x:40, y: height-38, size:22, font:fontBold, color: rgb(0.96,0.90,0.26) });
-  page.drawText('Resumo da Nota Fiscal — gerado automaticamente', { x:40, y: height-54, size:9, font:fontNormal, color: rgb(0.4,0.4,0.45) });
-
-  // NF number badge on the right
-  const nfLabel = 'NF ' + (parsedData.nfNum || '—');
-  page.drawRectangle({ x: width-120, y: height-50, width:80, height:26, color: rgb(0.96,0.60,0.26), borderRadius:4 });
-  page.drawText(nfLabel, { x: width-112, y: height-40, size:12, font:fontBold, color: rgb(0.08,0.08,0.08) });
-
-  // ── Divider ──
-  page.drawLine({ start:{x:40,y:height-72}, end:{x:width-40,y:height-72}, thickness:1, color:rgb(0.16,0.16,0.18) });
-
-  // ── Blocks ──
-  let curY = height - 88;
-
-  curY = drawHighlightedBlock({
-    y: curY, icon: '🏭', label: 'EMITENTE', color: '#f5e642',
-    lines: [parsedData.emitNome, parsedData.emitCNPJ].filter(Boolean),
-  });
-
-  curY = drawHighlightedBlock({
-    y: curY, icon: '🔢', label: 'Nº DA NOTA FISCAL', color: '#f59642',
-    lines: ['Nº ' + parsedData.nfNum].filter(v => v !== 'Nº '),
-  });
-
-  curY = drawHighlightedBlock({
-    y: curY, icon: '📦', label: 'DESTINATÁRIO', color: '#42c5f5',
-    lines: [parsedData.destNome, parsedData.destCNPJ, parsedData.destData ? 'Emissão: '+parsedData.destData : ''].filter(Boolean),
-  });
-
-  curY = drawHighlightedBlock({
-    y: curY, icon: '💰', label: 'VALOR TOTAL DA NOTA', color: '#42f5a7',
-    lines: [parsedData.valor].filter(Boolean),
-  });
-
-  if (parsedData.dados) {
-    // For dados, wrap long text
-    const dadosLines = wrapText(parsedData.dados, fontBold, 13, width - 110);
-    curY = drawHighlightedBlock({
-      y: curY, icon: '📎', label: 'NF DE ORIGEM (DADOS ADICIONAIS)', color: '#f542b0',
-      lines: dadosLines,
-    });
-  }
-
-  // ── Footer ──
-  page.drawLine({ start:{x:40,y:50}, end:{x:width-40,y:50}, thickness:1, color:rgb(0.16,0.16,0.18) });
-  const now = new Date().toLocaleString('pt-BR');
-  page.drawText(`Gerado em ${now} · nenhum dado foi enviado a servidores externos`, {
-    x:40, y:36, size:8, font:fontNormal, color:rgb(0.4,0.4,0.45)
-  });
-
-  // ── Save ──
-  const bytes = await doc.save();
-  const blob  = new Blob([bytes], { type:'application/pdf' });
-  const url   = URL.createObjectURL(blob);
-
-  // Open in new tab (works on GitHub Pages where auto-download is blocked)
-  const newTab = window.open(url, '_blank');
-  if (!newTab) {
-    // Fallback: direct link if popup was blocked
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `NF_${parsedData.nfNum || 'destaque'}.pdf`;
-    a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }
-
-  // Also update button to show a direct link
-  const btn = document.getElementById('btnPDF');
-  btn.textContent = '✅ PDF gerado — clique para abrir novamente';
-  btn.onclick = () => window.open(url, '_blank');
-
-  setStatus('PDF pronto! Se não abriu, verifique se popups estão permitidos.', 'ok');
 }
 
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
 // Simple word-wrap
 function wrapText(text, font, size, maxWidth) {
   const words = text.split(' ');
