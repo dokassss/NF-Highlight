@@ -457,12 +457,26 @@ async function generatePDF() {
   const bytes = await doc.save();
   const blob  = new Blob([bytes], { type:'application/pdf' });
   const url   = URL.createObjectURL(blob);
-  const a     = document.createElement('a');
-  a.href      = url;
-  a.download  = `NF_${parsedData.nfNum || 'destaque'}.pdf`;
-  a.click();
-  URL.revokeObjectURL(url);
-  setStatus('PDF gerado e baixado!', 'ok');
+
+  // Open in new tab (works on GitHub Pages where auto-download is blocked)
+  const newTab = window.open(url, '_blank');
+  if (!newTab) {
+    // Fallback: direct link if popup was blocked
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `NF_${parsedData.nfNum || 'destaque'}.pdf`;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  // Also update button to show a direct link
+  const btn = document.getElementById('btnPDF');
+  btn.textContent = '✅ PDF gerado — clique para abrir novamente';
+  btn.onclick = () => window.open(url, '_blank');
+
+  setStatus('PDF pronto! Se não abriu, verifique se popups estão permitidos.', 'ok');
 }
 
 // Simple word-wrap
