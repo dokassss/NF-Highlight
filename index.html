@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NF·highlight — DANFE</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<title>NF·highlight — XML</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <style>
   :root {
     --bg: #0f0f11;
@@ -13,529 +13,475 @@
     --border: #25252c;
     --text: #e8e8ec;
     --muted: #5a5a68;
-    --c-emitente: #f5e642;
-    --c-nf:       #f59642;
-    --c-dest:     #42c5f5;
-    --c-valor:    #42f5a7;
-    --c-dados:    #f542b0;
+    --yellow: #f5e642;
+    --green:  #42f5a7;
+    --blue:   #42c5f5;
+    --orange: #f59642;
+    --pink:   #f542b0;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+  body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 16px; }
 
-  header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
-  .logo { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
-  .logo span { color: var(--c-emitente); }
-  .badge { font-family: 'DM Mono', monospace; font-size: 10px; background: var(--border); color: var(--muted); padding: 3px 8px; border-radius: 4px; letter-spacing: 1px; }
-  .tagline { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+  .card {
+    width: 100%;
+    max-width: 560px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
 
-  main { flex: 1; display: flex; overflow: hidden; }
+  .card-header {
+    padding: 24px 28px 20px;
+    border-bottom: 1px solid var(--border);
+  }
 
-  .sidebar { width: 280px; min-width: 280px; border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px; gap: 20px; overflow-y: auto; }
+  .logo { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 4px; }
+  .logo span { color: var(--yellow); }
+  .subtitle { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
 
-  .drop-zone { border: 1.5px dashed var(--border); border-radius: 10px; padding: 28px 14px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--surface); position: relative; flex-shrink: 0; }
-  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--c-emitente); background: rgba(245,230,66,.04); }
+  .card-body { padding: 24px 28px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* DROP ZONE */
+  .drop-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: 12px;
+    padding: 36px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.over { border-color: var(--yellow); background: rgba(245,230,66,.04); }
   .drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
-  .drop-icon { font-size: 28px; margin-bottom: 10px; }
-  .drop-zone h3 { font-size: 13px; font-weight: 700; margin-bottom: 5px; }
-  .drop-zone p { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
-  .file-loaded { font-size: 11px; color: var(--c-emitente); font-family: 'DM Mono', monospace; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .drop-icon { font-size: 32px; margin-bottom: 12px; }
+  .drop-zone h3 { font-size: 14px; font-weight: 700; margin-bottom: 5px; }
+  .drop-zone p { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+  .file-name { margin-top: 8px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--yellow); }
 
-  .section-title { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  /* FIELDS */
+  .fields { display: flex; flex-direction: column; gap: 10px; display: none; }
+  .fields.visible { display: flex; }
 
-  .cat-list { display: flex; flex-direction: column; gap: 7px; }
-  .cat-item { display: flex; align-items: center; gap: 9px; padding: 9px 11px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; transition: all 0.15s; user-select: none; }
-  .cat-item:hover { border-color: #444; }
-  .cat-item.active { border-color: var(--cat-color); background: color-mix(in srgb, var(--cat-color) 6%, transparent); }
-  .cat-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--cat-color); }
-  .cat-name { font-size: 12px; font-weight: 600; flex: 1; line-height: 1.3; }
-  .cat-sub { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; font-weight: 400; }
-  .cat-count { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); background: var(--bg); padding: 1px 6px; border-radius: 3px; min-width: 22px; text-align: center; }
-  .cat-item.active .cat-count { color: var(--cat-color); }
-  .toggle { width: 30px; height: 17px; border-radius: 9px; background: var(--border); position: relative; transition: background 0.2s; flex-shrink: 0; }
-  .cat-item.active .toggle { background: var(--cat-color); }
-  .toggle::after { content: ''; position: absolute; width: 11px; height: 11px; border-radius: 50%; background: #fff; top: 3px; left: 3px; transition: left 0.2s; }
-  .cat-item.active .toggle::after { left: 16px; }
+  .field-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+  }
 
-  .btn-primary { width: 100%; padding: 13px; background: var(--c-emitente); color: #0e0e10; border: none; border-radius: 9px; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 800; cursor: pointer; transition: all 0.15s; flex-shrink: 0; }
-  .btn-primary:hover { background: #f0da00; transform: translateY(-1px); }
-  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+  .field-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .field-info { flex: 1; min-width: 0; }
+  .field-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-bottom: 3px; letter-spacing: .5px; text-transform: uppercase; }
+  .field-value { font-size: 13px; font-weight: 600; word-break: break-word; }
+  .field-empty { font-size: 12px; color: var(--muted); font-style: italic; font-family: 'DM Mono', monospace; }
 
-  .btn-secondary { width: 100%; padding: 11px; background: transparent; color: var(--c-valor); border: 1.5px solid var(--c-valor); border-radius: 9px; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; flex-shrink: 0; display: none; }
-  .btn-secondary:hover { background: rgba(66,245,167,.08); }
-  .btn-secondary.visible { display: block; }
+  /* BUTTON */
+  .btn {
+    width: 100%;
+    padding: 15px;
+    background: var(--yellow);
+    color: #0e0e10;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: none;
+  }
+  .btn:hover { background: #f0da00; transform: translateY(-1px); }
+  .btn.visible { display: block; }
 
-  .results-box { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 14px; display: none; flex-shrink: 0; }
-  .results-box.visible { display: block; }
-  .result-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
-  .result-row:last-child { border-bottom: none; }
-  .result-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
-  .result-info { flex: 1; min-width: 0; }
-  .result-label { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; margin-bottom: 2px; }
-  .result-value { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .result-empty { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; font-style: italic; }
+  /* STATUS */
+  .status {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    padding: 0 0 4px;
+    display: none;
+  }
+  .status.visible { display: block; }
+  .status.ok { color: var(--green); }
+  .status.err { color: #f54242; }
 
-  .preview-area { flex: 1; display: flex; flex-direction: column; align-items: center; overflow-y: auto; padding: 28px; background: #111113; gap: 16px; }
-  .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--muted); text-align: center; }
-  .empty-state .big-icon { font-size: 56px; opacity: 0.25; }
-  .empty-state h2 { font-size: 16px; font-weight: 700; opacity: 0.4; }
-  .empty-state p { font-family: 'DM Mono', monospace; font-size: 11px; max-width: 260px; line-height: 1.7; opacity: 0.6; }
-
-  .page-wrapper { position: relative; box-shadow: 0 8px 48px rgba(0,0,0,.6); border-radius: 3px; flex-shrink: 0; }
-  .page-wrapper canvas { display: block; }
-  .hl-layer { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
-
-  .status-bar { padding: 7px 28px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); flex-shrink: 0; }
-  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); transition: background 0.3s; }
-  .status-dot.ok   { background: var(--c-valor); box-shadow: 0 0 5px var(--c-valor); }
-  .status-dot.busy { background: var(--c-emitente); animation: pulse 1s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
-  .progress { flex: 1; height: 2px; background: var(--border); border-radius: 2px; overflow: hidden; display: none; }
-  .progress.visible { display: block; }
-  .progress-bar { height: 100%; background: var(--c-emitente); width: 0; transition: width 0.3s; }
+  .privacy {
+    text-align: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    padding: 0 28px 20px;
+  }
 </style>
 </head>
 <body>
 
-<header>
-  <div class="logo">NF<span>·</span>highlight</div>
-  <div class="badge">DANFE · LOCAL</div>
-  <div class="tagline">nenhum dado sai do seu computador</div>
-</header>
+<div class="card">
+  <div class="card-header">
+    <div class="logo">NF<span>·</span>highlight</div>
+    <div class="subtitle">XML NF-e → PDF com destaques · 100% local</div>
+  </div>
 
-<main>
-  <aside class="sidebar">
+  <div class="card-body">
+
     <div class="drop-zone" id="dropZone">
-      <input type="file" accept=".pdf" id="fileInput">
-      <div class="drop-icon">📄</div>
-      <h3>Arraste o DANFE aqui</h3>
-      <p>ou clique para selecionar</p>
-      <div class="file-loaded" id="fileName"></div>
+      <input type="file" accept=".xml" id="fileInput">
+      <div class="drop-icon">📋</div>
+      <h3>Arraste o XML da NF-e aqui</h3>
+      <p>ou clique para selecionar o arquivo</p>
+      <div class="file-name" id="fileName"></div>
     </div>
 
-    <div>
-      <div class="section-title">Campos a destacar</div>
-      <div class="cat-list" id="catList"></div>
+    <div class="fields" id="fields">
+      <div class="field-row">
+        <div class="field-dot" style="background:#f5e642"></div>
+        <div class="field-info">
+          <div class="field-label">Emitente</div>
+          <div class="field-value" id="f-emit-nome">—</div>
+          <div class="field-value" id="f-emit-cnpj" style="font-size:11px;font-family:'DM Mono',monospace;margin-top:2px;color:#aaa"></div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-dot" style="background:#f59642"></div>
+        <div class="field-info">
+          <div class="field-label">Nº da Nota Fiscal</div>
+          <div class="field-value" id="f-nf-num">—</div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-dot" style="background:#42c5f5"></div>
+        <div class="field-info">
+          <div class="field-label">Destinatário</div>
+          <div class="field-value" id="f-dest-nome">—</div>
+          <div class="field-value" id="f-dest-cnpj" style="font-size:11px;font-family:'DM Mono',monospace;margin-top:2px;color:#aaa"></div>
+          <div class="field-value" id="f-dest-data" style="font-size:11px;font-family:'DM Mono',monospace;margin-top:2px;color:#aaa"></div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-dot" style="background:#42f5a7"></div>
+        <div class="field-info">
+          <div class="field-label">Valor Total da Nota</div>
+          <div class="field-value" id="f-valor">—</div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-dot" style="background:#f542b0"></div>
+        <div class="field-info">
+          <div class="field-label">NF de Origem (Dados Adicionais)</div>
+          <div class="field-value" id="f-dados">—</div>
+        </div>
+      </div>
     </div>
 
-    <button class="btn-primary" id="btnHighlight" disabled>Destacar campos</button>
+    <div class="status" id="status"></div>
+    <button class="btn" id="btnPDF">⬇ Gerar PDF com destaques</button>
 
-    <div class="results-box" id="resultsBox">
-      <div class="section-title">Valores encontrados</div>
-      <div id="resultsContent"></div>
-    </div>
+  </div>
 
-    <button class="btn-secondary" id="btnDownload">⬇ Salvar PDF destacado</button>
-  </aside>
-
-  <section class="preview-area" id="previewArea">
-    <div class="empty-state" id="emptyState">
-      <div class="big-icon">🗂️</div>
-      <h2>Nenhum arquivo carregado</h2>
-      <p>Carregue um DANFE em PDF para detectar e destacar os campos automaticamente.</p>
-    </div>
-    <div id="canvasContainer"></div>
-  </section>
-</main>
-
-<div class="status-bar">
-  <div class="status-dot" id="statusDot"></div>
-  <span id="statusText">Aguardando arquivo…</span>
-  <div class="progress" id="progress"><div class="progress-bar" id="progressBar"></div></div>
+  <div class="privacy">🔒 nenhum dado é enviado para servidores externos</div>
 </div>
 
 <script>
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-// ── FIELD DEFINITIONS ──────────────────────────────────────────────────────────
-const FIELDS = [
-  { id:'emitente', label:'Emitente',           sub:'Nome e CNPJ',                color:'#f5e642', detect: detectEmitente },
-  { id:'nfnum',   label:'Nº da Nota Fiscal',   sub:'Número da NF',               color:'#f59642', detect: detectNFNum    },
-  { id:'dest',    label:'Destinatário',         sub:'Nome, CNPJ e Data emissão',  color:'#42c5f5', detect: detectDestinatario },
-  { id:'valor',   label:'Valor Total da Nota',  sub:'Cálculo do imposto',         color:'#42f5a7', detect: detectValorTotal },
-  { id:'dados',   label:'NF de Origem',         sub:'Dados adicionais',           color:'#f542b0', detect: detectDadosAdicionais },
-];
-
-// ── STATE ──────────────────────────────────────────────────────────────────────
-let pdfDoc = null;
-let renderedPages = [];
-let activeFields  = new Set(FIELDS.map(f => f.id));
-let foundValues   = {};
-
-// ── BUILD SIDEBAR ──────────────────────────────────────────────────────────────
-const catListEl = document.getElementById('catList');
-FIELDS.forEach(f => {
-  const div = document.createElement('div');
-  div.className = 'cat-item active';
-  div.dataset.id = f.id;
-  div.style.setProperty('--cat-color', f.color);
-  div.innerHTML = `
-    <div class="cat-dot"></div>
-    <div style="flex:1;min-width:0">
-      <div class="cat-name">${f.label}</div>
-      <div class="cat-sub">${f.sub}</div>
-    </div>
-    <span class="cat-count" id="cnt-${f.id}">–</span>
-    <div class="toggle"></div>`;
-  div.addEventListener('click', () => {
-    activeFields.has(f.id) ? (activeFields.delete(f.id), div.classList.remove('active'))
-                           : (activeFields.add(f.id),    div.classList.add('active'));
-  });
-  catListEl.appendChild(div);
-});
-
-// ── FILE LOADING ───────────────────────────────────────────────────────────────
-const fileInput = document.getElementById('fileInput');
+// ── FILE INPUT ────────────────────────────────────────────────────────────────
 const dropZone  = document.getElementById('dropZone');
-fileInput.addEventListener('change', e => e.target.files[0] && loadPDF(e.target.files[0]));
-dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); e.dataTransfer.files[0] && loadPDF(e.dataTransfer.files[0]); });
+const fileInput = document.getElementById('fileInput');
+let parsedData  = null;
 
-function setStatus(msg, state='idle') {
-  document.getElementById('statusText').textContent = msg;
-  document.getElementById('statusDot').className = 'status-dot' + (state==='ok'?' ok':state==='busy'?' busy':'');
-}
-function setProgress(pct) {
-  const p = document.getElementById('progress'), b = document.getElementById('progressBar');
-  if (pct===null) { p.classList.remove('visible'); return; }
-  p.classList.add('visible'); b.style.width = pct+'%';
+fileInput.addEventListener('change', e => e.target.files[0] && readXML(e.target.files[0]));
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('over');
+  e.dataTransfer.files[0] && readXML(e.dataTransfer.files[0]);
+});
+
+function setStatus(msg, type='') {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status visible' + (type ? ' '+type : '');
 }
 
-async function loadPDF(file) {
-  setStatus('Carregando PDF…','busy'); setProgress(10);
-  document.getElementById('emptyState').style.display = 'none';
-  document.getElementById('canvasContainer').innerHTML = '';
-  document.getElementById('btnDownload').classList.remove('visible');
-  document.getElementById('resultsBox').classList.remove('visible');
+// ── XML PARSING ───────────────────────────────────────────────────────────────
+function tag(doc, ...names) {
+  for (const name of names) {
+    const el = doc.getElementsByTagName(name)[0];
+    if (el && el.textContent.trim()) return el.textContent.trim();
+  }
+  return '';
+}
+
+function formatCNPJ(v) {
+  const d = v.replace(/\D/g,'');
+  if (d.length===14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
+  if (d.length===11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4');
+  return v;
+}
+
+function formatDate(v) {
+  // dhEmi format: 2025-11-01T00:00:00-03:00  or  2025-11-01
+  const m = v.match(/(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : v;
+}
+
+function formatMoney(v) {
+  const n = parseFloat(v);
+  if (isNaN(n)) return v;
+  return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+}
+
+// Extract NF origin number from infCpl
+// Matches patterns like: NF COMPLEMENTAR IPI 000003878-1, NF COMPLEMENTA 000.003.881-1, etc.
+function extractNFOrigem(txt) {
+  if (!txt) return txt;
+  // Match number before -1 or -01 (handles zero-padded and dotted formats)
+  const m = txt.match(/(?:NF|NOTA\s+FISCAL)\b.*?(?:0+\.?)*?(\d{3,6})\s*[-–]\s*0?1/i);
+  if (m) return `${txt.trim()} → Nº origem: ${m[1]}`;
+  return txt.trim();
+}
+
+function readXML(file) {
   document.getElementById('fileName').textContent = file.name;
-  FIELDS.forEach(f => document.getElementById('cnt-'+f.id).textContent = '–');
-  renderedPages = [];
+  setStatus('Lendo XML…');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(e.target.result, 'text/xml');
 
-  const buf = await file.arrayBuffer();
-  pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
-  const scale = 1.6;
+      const erroXML = doc.querySelector('parsererror');
+      if (erroXML) { setStatus('Arquivo XML inválido.', 'err'); return; }
 
-  for (let i = 1; i <= pdfDoc.numPages; i++) {
-    setProgress(10 + (i/pdfDoc.numPages)*75);
-    const page = await pdfDoc.getPage(i);
-    const vp   = page.getViewport({ scale });
+      parsedData = {
+        emitNome: tag(doc, 'xNome'),   // first xNome = emitente
+        emitCNPJ: formatCNPJ(tag(doc, 'emit > CNPJ') || (() => {
+          // fallback: get CNPJ inside emit element
+          const emit = doc.getElementsByTagName('emit')[0];
+          return emit ? (tag(emit,'CNPJ') || tag(emit,'CPF') || '') : '';
+        })()),
+        nfNum:    tag(doc, 'nNF'),
+        destNome: (() => {
+          const dest = doc.getElementsByTagName('dest')[0];
+          return dest ? tag(dest,'xNome') : '';
+        })(),
+        destCNPJ: formatCNPJ((() => {
+          const dest = doc.getElementsByTagName('dest')[0];
+          return dest ? (tag(dest,'CNPJ') || tag(dest,'CPF') || '') : '';
+        })()),
+        destData: formatDate(tag(doc,'dhEmi','dEmi')),
+        valor:    formatMoney(tag(doc,'vNF')),
+        dados:    extractNFOrigem(tag(doc,'infCpl','infAdFisco')),
+      };
 
-    const wrapper = document.createElement('div');
-    wrapper.className = 'page-wrapper';
-    wrapper.style.width  = vp.width +'px';
-    wrapper.style.height = vp.height+'px';
+      // Fix emitNome vs destNome collision (both use xNome)
+      const xNomes = doc.getElementsByTagName('xNome');
+      if (xNomes.length >= 2) {
+        parsedData.emitNome = xNomes[0].textContent.trim();
+        parsedData.destNome = xNomes[1].textContent.trim();
+      }
 
-    const canvas = document.createElement('canvas');
-    canvas.width = vp.width; canvas.height = vp.height;
-    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+      // Fix emitCNPJ
+      const emitEl = doc.getElementsByTagName('emit')[0];
+      if (emitEl) {
+        const cnpjEl = emitEl.getElementsByTagName('CNPJ')[0] || emitEl.getElementsByTagName('CPF')[0];
+        parsedData.emitCNPJ = cnpjEl ? formatCNPJ(cnpjEl.textContent.trim()) : '';
+      }
 
-    const hlLayer = document.createElementNS('http://www.w3.org/2000/svg','svg');
-    hlLayer.setAttribute('class','hl-layer');
-    hlLayer.setAttribute('width', vp.width);
-    hlLayer.setAttribute('height', vp.height);
-    hlLayer.setAttribute('viewBox', `0 0 ${vp.width} ${vp.height}`);
+      // Fix destCNPJ
+      const destEl = doc.getElementsByTagName('dest')[0];
+      if (destEl) {
+        const cnpjEl = destEl.getElementsByTagName('CNPJ')[0] || destEl.getElementsByTagName('CPF')[0];
+        parsedData.destCNPJ = cnpjEl ? formatCNPJ(cnpjEl.textContent.trim()) : '';
+      }
 
-    wrapper.appendChild(canvas);
-    wrapper.appendChild(hlLayer);
-    document.getElementById('canvasContainer').appendChild(wrapper);
+      // Fill UI
+      setText('f-emit-nome', parsedData.emitNome);
+      setText('f-emit-cnpj', parsedData.emitCNPJ);
+      setText('f-nf-num',    'Nº ' + parsedData.nfNum);
+      setText('f-dest-nome', parsedData.destNome);
+      setText('f-dest-cnpj', parsedData.destCNPJ);
+      setText('f-dest-data', 'Emissão: ' + parsedData.destData);
+      setText('f-valor',     parsedData.valor);
+      setText('f-dados',     parsedData.dados || '—');
 
-    const tc = await page.getTextContent();
-    const items = tc.items.map(it => {
-      const tx = pdfjsLib.Util.transform(vp.transform, it.transform);
-      return { str: it.str, x: tx[4], y: tx[5], w: Math.abs(it.width*scale), h: Math.abs(it.height*scale) };
+      document.getElementById('fields').classList.add('visible');
+      document.getElementById('btnPDF').classList.add('visible');
+      setStatus('XML lido com sucesso!', 'ok');
+    } catch(err) {
+      setStatus('Erro ao ler XML: ' + err.message, 'err');
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (!val || val === 'R$ 0,00' || val === 'Nº ') { el.textContent = '—'; el.style.opacity='.4'; }
+  else { el.textContent = val; el.style.opacity='1'; }
+}
+
+// ── PDF GENERATION ────────────────────────────────────────────────────────────
+document.getElementById('btnPDF').addEventListener('click', generatePDF);
+
+async function generatePDF() {
+  if (!parsedData) return;
+  setStatus('Gerando PDF…', '');
+
+  const { PDFDocument, rgb, StandardFonts } = PDFLib;
+
+  const doc  = await PDFDocument.create();
+  const page = doc.addPage([595, 842]); // A4
+  const { width, height } = page.getSize();
+
+  const fontBold   = await doc.embedFont(StandardFonts.HelveticaBold);
+  const fontNormal = await doc.embedFont(StandardFonts.Helvetica);
+
+  // ── helpers ──
+  function hexToRgb(hex) {
+    const r = parseInt(hex.slice(1,3),16)/255;
+    const g = parseInt(hex.slice(3,5),16)/255;
+    const b = parseInt(hex.slice(5,7),16)/255;
+    return rgb(r,g,b);
+  }
+
+  function drawHighlightedBlock(opts) {
+    const { y, label, lines, color, icon } = opts;
+    const blockH  = 20 + lines.length * 20 + 14;
+    const blockY  = y - blockH;
+
+    // Background highlight (marker style)
+    page.drawRectangle({
+      x: 40, y: blockY,
+      width: width - 80, height: blockH,
+      color: hexToRgb(color),
+      opacity: 0.18,
+      borderRadius: 4,
     });
-    renderedPages.push({ viewport: vp, canvas, hlLayer, items });
+    // Left accent bar
+    page.drawRectangle({
+      x: 40, y: blockY,
+      width: 4, height: blockH,
+      color: hexToRgb(color),
+      opacity: 1,
+    });
+
+    // Icon + Label
+    page.drawText(`${icon}  ${label}`, {
+      x: 52, y: blockY + blockH - 16,
+      size: 9,
+      font: fontBold,
+      color: hexToRgb(color),
+    });
+
+    // Lines
+    lines.forEach((line, i) => {
+      if (!line || line === '—') return;
+      // highlight strip behind the value text
+      const textW = fontBold.widthOfTextAtSize(line, 13);
+      page.drawRectangle({
+        x: 50, y: blockY + blockH - 34 - i*20,
+        width: Math.min(textW + 8, width - 100),
+        height: 17,
+        color: hexToRgb(color),
+        opacity: 0.45,
+        borderRadius: 2,
+      });
+      page.drawText(line, {
+        x: 54, y: blockY + blockH - 30 - i*20,
+        size: 13,
+        font: fontBold,
+        color: rgb(0.08, 0.08, 0.10),
+      });
+    });
+
+    return blockY - 12; // next Y
   }
 
-  setProgress(100); setTimeout(()=>setProgress(null),400);
-  document.getElementById('btnHighlight').disabled = false;
-  setStatus(`${pdfDoc.numPages} página(s) carregada(s) — clique em Destacar`,'ok');
-}
+  // ── Header ──
+  page.drawRectangle({ x:0, y: height-60, width, height:60, color: rgb(0.06,0.06,0.07) });
+  page.drawText('NF·highlight', { x:40, y: height-38, size:22, font:fontBold, color: rgb(0.96,0.90,0.26) });
+  page.drawText('Resumo da Nota Fiscal — gerado automaticamente', { x:40, y: height-54, size:9, font:fontNormal, color: rgb(0.4,0.4,0.45) });
 
-// ── HIGHLIGHT RUNNER ───────────────────────────────────────────────────────────
-document.getElementById('btnHighlight').addEventListener('click', () => {
-  if (!pdfDoc) return;
-  setStatus('Analisando campos…','busy'); setProgress(5);
-  foundValues = {};
-  renderedPages.forEach(rp => rp.hlLayer.innerHTML = '');
+  // NF number badge on the right
+  const nfLabel = 'NF ' + (parsedData.nfNum || '—');
+  page.drawRectangle({ x: width-120, y: height-50, width:80, height:26, color: rgb(0.96,0.60,0.26), borderRadius:4 });
+  page.drawText(nfLabel, { x: width-112, y: height-40, size:12, font:fontBold, color: rgb(0.08,0.08,0.08) });
 
-  const allPages = renderedPages.map((rp,i) => ({ idx:i, items:rp.items, h:rp.viewport.height }));
+  // ── Divider ──
+  page.drawLine({ start:{x:40,y:height-72}, end:{x:width-40,y:height-72}, thickness:1, color:rgb(0.16,0.16,0.18) });
 
-  FIELDS.forEach((field, fi) => {
-    setProgress(5 + (fi/FIELDS.length)*90);
-    if (!activeFields.has(field.id)) { document.getElementById('cnt-'+field.id).textContent='–'; return; }
-    const hits = field.detect(allPages);
-    foundValues[field.id] = hits;
-    document.getElementById('cnt-'+field.id).textContent = hits.length;
-    hits.forEach(h => drawRect(renderedPages[h.page].hlLayer, h.x, h.y, h.w, h.h, field.color));
+  // ── Blocks ──
+  let curY = height - 88;
+
+  curY = drawHighlightedBlock({
+    y: curY, icon: '🏭', label: 'EMITENTE', color: '#f5e642',
+    lines: [parsedData.emitNome, parsedData.emitCNPJ].filter(Boolean),
   });
 
-  renderResults();
-  setProgress(null);
-  const total = Object.values(foundValues).reduce((s,a)=>s+a.length,0);
-  document.getElementById('btnDownload').classList.add('visible');
-  setStatus(`${total} destaque(s) aplicado(s)`,'ok');
-});
-
-function drawRect(svg, x, y, w, h, color) {
-  const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
-  const padX = 4, padTop = h * 0.18, padBot = h * 0.12;
-  r.setAttribute('x',      x - padX);
-  r.setAttribute('y',      y - h - padTop);
-  r.setAttribute('width',  Math.max(w + padX * 2, 30));
-  r.setAttribute('height', Math.max(h + padTop + padBot, 14));
-  r.setAttribute('fill',         color);
-  r.setAttribute('fill-opacity', '0.65');
-  r.setAttribute('rx', '1');
-  r.setAttribute('style', 'mix-blend-mode: multiply;');
-  svg.appendChild(r);
-}
-
-// ── RESULTS PANEL ──────────────────────────────────────────────────────────────
-function renderResults() {
-  const content = document.getElementById('resultsContent');
-  content.innerHTML = '';
-  FIELDS.forEach(f => {
-    if (!activeFields.has(f.id)) return;
-    const hits   = foundValues[f.id] || [];
-    const unique = [...new Set(hits.map(h=>h.text))];
-    const row = document.createElement('div');
-    row.className = 'result-row';
-    row.innerHTML = `
-      <div class="result-dot" style="background:${f.color};${unique.length?'':'opacity:.3'}"></div>
-      <div class="result-info">
-        <div class="result-label">${f.label}</div>
-        ${unique.length
-          ? `<div class="result-value" title="${unique.join(' | ')}">${unique.join(' · ')}</div>`
-          : `<div class="result-empty">não encontrado</div>`}
-      </div>`;
-    content.appendChild(row);
+  curY = drawHighlightedBlock({
+    y: curY, icon: '🔢', label: 'Nº DA NOTA FISCAL', color: '#f59642',
+    lines: ['Nº ' + parsedData.nfNum].filter(v => v !== 'Nº '),
   });
-  document.getElementById('resultsBox').classList.add('visible');
-}
 
-// ── DETECTION HELPERS ──────────────────────────────────────────────────────────
-function pageText(items) { return items.map(i=>i.str).join(' '); }
-
-function makeHit(pg, item, text) {
-  return { page:pg.idx, x:item.x, y:item.y, w:item.w, h:item.h, text: text||item.str.trim() };
-}
-
-function rowHit(pg, items, refItem, text) {
-  // highlight the full row containing refItem
-  const rowItems = items.filter(i => Math.abs(i.y - refItem.y) < 8 && i.str.trim());
-  if (!rowItems.length) return makeHit(pg, refItem, text);
-  const minX = Math.min(...rowItems.map(i=>i.x));
-  const maxX = Math.max(...rowItems.map(i=>i.x+i.w));
-  const maxH = Math.max(...rowItems.map(i=>i.h));
-  return { page:pg.idx, x:minX, y:refItem.y, w:maxX-minX, h:maxH, text };
-}
-
-function dedup(hits) {
-  const seen = new Set();
-  return hits.filter(h => { const k=`${h.page}:${Math.round(h.x)}:${Math.round(h.y)}`; return seen.has(k)?false:seen.add(k); });
-}
-
-// ── 1. EMITENTE ────────────────────────────────────────────────────────────────
-function detectEmitente(allPages) {
-  const hits = [];
-  const cnpjRe = /\d{2}[.\s]?\d{3}[.\s]?\d{3}[\/\s]?\d{4}[-\s]?\d{2}/;
-
-  for (const pg of allPages) {
-    const items = pg.items;
-    // Find EMITENTE label
-    const label = items.find(i => /\bEMITENTE\b/i.test(i.str));
-    const refY  = label ? label.y : 0;
-
-    // Nome: lines near / above EMITENTE label, not short codes
-    const nameItems = items.filter(i =>
-      i.y >= refY - 80 && i.y <= refY + 20 &&
-      i.str.trim().length > 4 &&
-      !/CNPJ|CPF|^NF|DANFE|NOTA\s+FISCAL/i.test(i.str)
-    );
-    nameItems.forEach(item => hits.push(makeHit(pg, item)));
-
-    // First CNPJ on page = emitente
-    for (const item of items) {
-      if (cnpjRe.test(item.str)) { hits.push(makeHit(pg, item)); break; }
-    }
-  }
-  return dedup(hits);
-}
-
-// ── 2. Nº DA NOTA FISCAL ──────────────────────────────────────────────────────
-function detectNFNum(allPages) {
-  const hits = [];
-  for (const pg of allPages) {
-    const items = pg.items;
-    // Pattern 1: item containing "Nº" or "No." directly with digits
-    for (const item of items) {
-      const m = item.str.match(/N[°ºo\.]\s*(\d[\d.]{2,})/i);
-      if (m) { hits.push(makeHit(pg, item, m[1].replace(/\./g,''))); }
-    }
-    // Pattern 2: "NOTA FISCAL" label followed closely by a number-only item
-    for (let i=0; i<items.length; i++) {
-      if (/NOTA\s+FISCAL/i.test(items[i].str)) {
-        for (let j=i+1; j<Math.min(i+8,items.length); j++) {
-          if (/^[\d.]+$/.test(items[j].str.trim()) && items[j].str.trim().length>=3) {
-            hits.push(makeHit(pg, items[j], items[j].str.trim().replace(/\./g,'')));
-            break;
-          }
-        }
-      }
-    }
-  }
-  const seen=new Set();
-  return hits.filter(h=>{ const k=h.page+':'+h.text; return seen.has(k)?false:seen.add(k); });
-}
-
-// ── 3. DESTINATÁRIO ───────────────────────────────────────────────────────────
-function detectDestinatario(allPages) {
-  const hits = [];
-  const cnpjRe = /\d{2}[.\s]?\d{3}[.\s]?\d{3}[\/\s]?\d{4}[-\s]?\d{2}/;
-  const dateRe = /\b\d{2}[\/\-.]\d{2}[\/\-.]\d{4}\b/;
-
-  for (const pg of allPages) {
-    const items = pg.items;
-    const label = items.find(i => /DESTINAT[AÁ]RIO/i.test(i.str));
-    const refY  = label ? label.y : pg.h * 0.25;
-
-    const block = items.filter(i => i.y >= refY-5 && i.y <= refY+140);
-
-    // Nome/Razão Social: widest text in block excluding known labels
-    const nameItems = block.filter(i =>
-      i.w > 80 &&
-      /[A-Za-zÀ-ú]{3,}/.test(i.str) &&
-      !/^(CNPJ|CPF|DATA|EMISS|FONE|END|CEP|MUNIC|UF\b|IE\b|INSCR|RG\b|DEST)/i.test(i.str.trim())
-    ).sort((a,b)=>b.w-a.w);
-    nameItems.slice(0,2).forEach(item => hits.push(makeHit(pg, item)));
-
-    // CNPJ: second CNPJ on page
-    let cnpjCount = 0;
-    for (const item of items) {
-      if (cnpjRe.test(item.str)) {
-        cnpjCount++;
-        if (cnpjCount===2) { hits.push(makeHit(pg,item)); break; }
-      }
-    }
-
-    // Data de emissão: first date in block or page
-    const dateItem = block.find(i=>dateRe.test(i.str)) || items.find(i=>dateRe.test(i.str));
-    if (dateItem) hits.push(makeHit(pg, dateItem, dateItem.str.match(dateRe)[0]));
-  }
-  return dedup(hits);
-}
-
-// ── 4. VALOR TOTAL ────────────────────────────────────────────────────────────
-function detectValorTotal(allPages) {
-  const hits = [];
-  const moneyRe = /\d{1,3}(?:\.\d{3})+,\d{2}|\d+,\d{2}/;
-
-  for (const pg of allPages) {
-    const items = pg.items;
-
-    // Find "VALOR TOTAL" label
-    for (let i=0; i<items.length; i++) {
-      if (/VALOR\s+TOTAL/i.test(items[i].str)) {
-        const rowY = items[i].y;
-        // same row
-        const rowItems = items.filter(it=>Math.abs(it.y-rowY)<12 && it!==items[i]);
-        const rowMoney = rowItems.find(it=>moneyRe.test(it.str));
-        if (rowMoney) { hits.push(makeHit(pg,rowMoney,rowMoney.str.match(moneyRe)[0])); continue; }
-        // below
-        const below = items.filter(it=>it.y>rowY && it.y<rowY+35);
-        const belowMoney = below.find(it=>moneyRe.test(it.str));
-        if (belowMoney) { hits.push(makeHit(pg,belowMoney,belowMoney.str.match(moneyRe)[0])); }
-      }
-    }
-
-    // Fallback: largest monetary value on page
-    if (!hits.find(h=>h.page===pg.idx)) {
-      let best=null, bestVal=0;
-      for (const item of items) {
-        const m=item.str.match(moneyRe);
-        if (m) {
-          const val=parseFloat(m[0].replace(/\./g,'').replace(',','.'));
-          if (val>bestVal) { bestVal=val; best={item,text:m[0]}; }
-        }
-      }
-      if (best) hits.push(makeHit(pg,best.item,best.text));
-    }
-  }
-  const seen=new Set();
-  return hits.filter(h=>{ const k=h.text; return seen.has(k)?false:seen.add(k); });
-}
-
-// ── 5. DADOS ADICIONAIS — NF de Origem ───────────────────────────────────────
-// Captures the 3-6 digit reference number (e.g. 3878) from patterns like:
-//   NF COMPLEMENTAR IPI 000003878-1
-//   NF COMPLEMENTA 000.003.881-1
-//   NOTA FISCAL COMPLETO REF 3887-01
-//   NF Complementar de IPI 3878-1
-function detectDadosAdicionais(allPages) {
-  const hits = [];
-  // Matches the reference number before -1 or -01
-  // Handles zero-padded (000003878) and dotted (000.003.881) formats
-  const refNumRe = /(?:NF|NOTA\s+FISCAL)\s+\S+(?:\s+\S+){0,4}?\s+(?:0*\.?)*?(\d{3,6})\s*[-–]\s*0?1/gi;
-  // Simpler fallback: any \d{3,6}-01 or \d{3,6}-1
-  const simpleRe = /\b(?:0+\.?)*?(\d{3,6})\s*[-–]\s*(01|1)\b/g;
-
-  for (const pg of allPages) {
-    const items = pg.items;
-    // Find dados adicionais section
-    const dadosLabel = items.find(i=>/DADOS\s+ADICIONAIS/i.test(i.str));
-    const sectionItems = dadosLabel
-      ? items.filter(i=>i.y>=dadosLabel.y && i.y<=dadosLabel.y+250)
-      : items; // fallback: whole page
-
-    const sectionText = sectionItems.map(i=>i.str).join(' ');
-
-    // Try full pattern
-    refNumRe.lastIndex = 0;
-    let m;
-    while ((m=refNumRe.exec(sectionText))!==null) {
-      const num = m[1];
-      const fullMatch = m[0].trim();
-      // Find item containing this number
-      const anchor = sectionItems.find(i=> i.str.includes(num) || i.str.replace(/[.\s]/g,'').includes('0'.repeat(Math.max(0,6-num.length))+num));
-      if (anchor) {
-        hits.push(rowHit(pg, sectionItems, anchor, `NF origem: ${num}`));
-      }
-    }
-
-    // Fallback: simpleRe in section
-    if (!hits.find(h=>h.page===pg.idx)) {
-      simpleRe.lastIndex = 0;
-      while ((m=simpleRe.exec(sectionText))!==null) {
-        const num = m[1];
-        const anchor = sectionItems.find(i=>i.str.includes(num));
-        if (anchor) hits.push(rowHit(pg, sectionItems, anchor, `NF origem: ${num}`));
-      }
-    }
-  }
-
-  const seen=new Set();
-  return hits.filter(h=>{ const k=h.page+':'+Math.round(h.x)+':'+Math.round(h.y); return seen.has(k)?false:seen.add(k); });
-}
-
-// ── DOWNLOAD ───────────────────────────────────────────────────────────────────
-document.getElementById('btnDownload').addEventListener('click', () => {
-  setStatus('Abrindo diálogo de impressão…','busy');
-  const win = window.open('','_blank');
-  win.document.write(`<!DOCTYPE html><html><head><style>
-    *{margin:0;padding:0;box-sizing:border-box}body{background:#fff}
-    .pg{position:relative;page-break-after:always}
-    .pg img{display:block;width:100%}
-    .pg svg{position:absolute;inset:0;width:100%;height:100%}
-  </style></head><body>`);
-  renderedPages.forEach(({canvas,hlLayer}) => {
-    win.document.write(`<div class="pg"><img src="${canvas.toDataURL('image/jpeg',.95)}">${hlLayer.outerHTML}</div>`);
+  curY = drawHighlightedBlock({
+    y: curY, icon: '📦', label: 'DESTINATÁRIO', color: '#42c5f5',
+    lines: [parsedData.destNome, parsedData.destCNPJ, parsedData.destData ? 'Emissão: '+parsedData.destData : ''].filter(Boolean),
   });
-  win.document.write(`<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
-  win.document.close();
-  setStatus('Use "Salvar como PDF" no diálogo de impressão','ok');
-});
+
+  curY = drawHighlightedBlock({
+    y: curY, icon: '💰', label: 'VALOR TOTAL DA NOTA', color: '#42f5a7',
+    lines: [parsedData.valor].filter(Boolean),
+  });
+
+  if (parsedData.dados) {
+    // For dados, wrap long text
+    const dadosLines = wrapText(parsedData.dados, fontBold, 13, width - 110);
+    curY = drawHighlightedBlock({
+      y: curY, icon: '📎', label: 'NF DE ORIGEM (DADOS ADICIONAIS)', color: '#f542b0',
+      lines: dadosLines,
+    });
+  }
+
+  // ── Footer ──
+  page.drawLine({ start:{x:40,y:50}, end:{x:width-40,y:50}, thickness:1, color:rgb(0.16,0.16,0.18) });
+  const now = new Date().toLocaleString('pt-BR');
+  page.drawText(`Gerado em ${now} · nenhum dado foi enviado a servidores externos`, {
+    x:40, y:36, size:8, font:fontNormal, color:rgb(0.4,0.4,0.45)
+  });
+
+  // ── Save ──
+  const bytes = await doc.save();
+  const blob  = new Blob([bytes], { type:'application/pdf' });
+  const url   = URL.createObjectURL(blob);
+  const a     = document.createElement('a');
+  a.href      = url;
+  a.download  = `NF_${parsedData.nfNum || 'destaque'}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+  setStatus('PDF gerado e baixado!', 'ok');
+}
+
+// Simple word-wrap
+function wrapText(text, font, size, maxWidth) {
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const test = line ? line+' '+word : word;
+    if (font.widthOfTextAtSize(test, size) > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.slice(0, 5); // max 5 lines
+}
 </script>
 </body>
 </html>
